@@ -56,10 +56,8 @@ static void devfreq_max_unboost(struct work_struct *work);
 }
 
 static struct df_boost_drv df_boost_drv_g __read_mostly = {
-	BOOST_DEV_INIT(df_boost_drv_g, DEVFREQ_MSM_CPUBW,
-		       CONFIG_DEVFREQ_MSM_CPUBW_BOOST_FREQ),
-	BOOST_DEV_INIT(df_boost_drv_g, DEVFREQ_MSM_LLCCBW,
-		       CONFIG_DEVFREQ_MSM_LLCCBW_BOOST_FREQ)
+	BOOST_DEV_INIT(df_boost_drv_g, DEVFREQ_CPU_CPU_LLCC_BW,
+		       CONFIG_DEVFREQ_CPU_CPU_LLCC_BW_BOOST_FREQ),
 };
 
 static void __devfreq_boost_kick(struct boost_dev *b)
@@ -351,7 +349,7 @@ static int __init devfreq_boost_init(void)
 	}
 
 	d->msm_drm_notif.notifier_call = msm_drm_notifier_cb;
-	d->msm_drm_notif.priority = INT_MAX;
+	d->msm_drm_notif.priority = INT_MAX - 2;
 	ret = msm_drm_register_client(&d->msm_drm_notif);
 	if (ret) {
 		pr_err("Failed to register fb notifier, err: %d\n", ret);
