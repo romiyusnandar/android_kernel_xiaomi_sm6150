@@ -147,6 +147,9 @@ static bool is_bq25970_available(struct step_chg_info *chip)
 		chip->bq_psy = power_supply_get_by_name("bq2597x-standalone");
 
 	if (!chip->bq_psy)
+		chip->bq_psy = power_supply_get_by_name("ln8000");
+
+	if (!chip->bq_psy)
 		return false;
 
 	return true;
@@ -291,8 +294,14 @@ static int get_step_chg_jeita_setting_from_profile(struct step_chg_info *chip)
 	if (batt_id_ohms < 0)
 		return -EBUSY;
 
+#ifdef CONFIG_K6_CHARGE
+	profile_node = of_batterydata_get_best_profile(batt_node,
+					batt_id_ohms / 1000, "K6_sunwoda_5020mah");
+#else
 	profile_node = of_batterydata_get_best_profile(batt_node,
 					batt_id_ohms / 1000, NULL);
+#endif
+
 	if (IS_ERR(profile_node))
 		return PTR_ERR(profile_node);
 
@@ -825,7 +834,7 @@ static int handle_jeita(struct step_chg_info *chip)
 
 	temp = pval.intval;
 	/* should disable/enable cp(smb1390) when soft jeita trigger and clear */
-	if (chip->six_pin_battery && !chip->use_bq_pump) {
+	if (chip->six_pin_battery && !chip->use_bq_pump && is_bq25970_available(chip)) {
 		if (!chip->cp_disable_votable)
 			chip->cp_disable_votable = find_votable("CP_DISABLE");
 
