@@ -101,3 +101,4 @@ obj-$(CONFIG_OKL4_LINK_SHBUF)    += okl4-link-shbuf.o
 obj-$(CONFIG_SPI_XIAOMI_TP) += spi-xiaomi-tp.o
 
 obj-$(CONFIG_FORCE_FAST_CHARGE) += fastchg.o
+obj-y += evergreen_kernel_proc.o
