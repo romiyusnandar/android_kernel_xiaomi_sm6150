@@ -17,12 +17,12 @@ if [[ ! " ${ALLOWED_CODENAMES[@]} " =~ " ${DEVICE} " ]]; then
     exit 1
 fi
 
-ZIPNAME="${DEVICE}-$(date '+%Y%m%d-%H%M').zip"
+ZIPNAME="VantomKernel-KSU-${DEVICE}-$(date '+%Y%m%d-%H%M').zip"
 
 export ARCH=arm64
-export KBUILD_BUILD_USER=aryan
-export KBUILD_BUILD_HOST=celeste
-export PATH="/home/celeste/pixelos/prebuilts/clang/host/linux-x86/clang-r522817/bin/:$PATH"
+export KBUILD_BUILD_USER=donjohanliebert
+export KBUILD_BUILD_HOST=511Kinderheim
+export PATH="$HOME/hzm/prebuilts/clang/host/linux-x86/clang-r522817/bin/:$PATH"
 
 if [[ $1 = "-c" || $1 = "--clean" ]]; then
 	rm -rf out
