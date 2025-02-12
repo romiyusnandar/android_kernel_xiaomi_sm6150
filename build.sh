@@ -1,81 +1,189 @@
 #!/bin/bash
 #
 # Compile script for kernel
+# Copyright (C) 2025 RyuDev (romiyusnandar)
+# All rights reserved.
 #
 
-SECONDS=0 # builtin bash timer
+#######################################
+# Variabel dasar build
+#######################################
+DEVICE="sweet"
+BUILD_TYPE="Development"
+KERNEL="Kryptonite"
 
-# Allowed codenames
-ALLOWED_CODENAMES=("sweet" "tucana" "toco" "phoenix" "davinci")
+#
+# Jika CONFIG_LOCALVERSION_AUTO aktif, kernel build system akan menambahkan suffix
+# berdasarkan status Git. Kita bisa mendapatkan nilai yang sama menggunakan:
+#   git describe --dirty --always
+#
+# Misalnya, kita ingin memasukkan string tersebut ke dalam nama kernel.
+#
+# Perhatikan bahwa ZIPNAME di-generate sebelum kita melakukan modifikasi pada KERNEL.
+# Perbarui zipname di main
+ZIPNAME=""
 
-# Prompt user for device codename
-read -p "Enter device codename: " DEVICE
+#######################################
+# Konfigurasi Telegram
+#######################################
+CHATIDQ="-1001597724605"
+CHATID="-1001597724605"
+TELEGRAM_TOKEN="7249254292:AAH3367b3c_QmHyDsgQByaSh1qTSqw8Ngt0"
 
-# Check if the entered codename is in the allowed list
-if [[ ! " ${ALLOWED_CODENAMES[@]} " =~ " ${DEVICE} " ]]; then
-    echo "Error: Invalid codename. Allowed codenames are: ${ALLOWED_CODENAMES[*]}"
-    exit 1
+#######################################
+# Clone Telegram.sh jika belum ada
+#######################################
+TELEGRAM_FOLDER="${HOME}/telegram"
+if ! [ -d "${TELEGRAM_FOLDER}" ]; then
+    git clone https://github.com/romiyusnandar/telegram.sh/ "${TELEGRAM_FOLDER}"
 fi
+TELEGRAM="${TELEGRAM_FOLDER}/telegram"
 
-ZIPNAME="${DEVICE}-$(date '+%Y%m%d-%H%M').zip"
+#######################################
+# Fungsi untuk mengirim pesan ke Telegram menggunakan telegram.sh
+#######################################
+tg_cast() {
+    "${TELEGRAM}" -t "${TELEGRAM_TOKEN}" -c "${CHATID}" -H \
+    "$(
+        for POST in "${@}"; do
+            echo "${POST}"
+        done
+    )"
+}
 
+#######################################
+# Set environment untuk build
+#######################################
 export ARCH=arm64
-export KBUILD_BUILD_USER=aryan
-export KBUILD_BUILD_HOST=celeste
-export PATH="/home/celeste/pixelos/prebuilts/clang/host/linux-x86/clang-r530567/bin/:$PATH"
+export KBUILD_BUILD_USER="RyuDev"
+export KBUILD_BUILD_HOST="RyuServer"
+export PATH="/home/romiz/ryu/clang/bin/:$PATH"
 
-if [[ $1 = "-c" || $1 = "--clean" ]]; then
-	rm -rf out
-	echo "Cleaned output folder"
-fi
+#######################################
+# Fungsi: Kirim pesan awal build via Telegram
+#######################################
+send_start_telegram() {
+    local commit_hash repo_url commit_url
 
-echo -e "\nStarting compilation for $DEVICE...\n"
-make O=out ARCH=arm64 ${DEVICE}_defconfig
-make -j$(nproc) \
-    O=out \
-    ARCH=arm64 \
-    LLVM=1 \
-    LLVM_IAS=1 \
-    CROSS_COMPILE=aarch64-linux-gnu- \
-    CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+    commit_hash=$(git rev-parse --short HEAD 2>/dev/null)
+    repo_url="https://github.com/romiyusnandar/android_kernel_xiaomi_sm6150"
+    commit_url="${repo_url}/commit/${commit_hash}"
+    random_str=$(git describe --dirty --always)
 
-kernel="out/arch/arm64/boot/Image.gz"
-dtbo="out/arch/arm64/boot/dtbo.img"
-dtb="out/arch/arm64/boot/dtb.img"
+    tg_cast "<b>STARTING KERNEL BUILD</b>" \
+        "Device: <code>${DEVICE}</code>" \
+        "Build Type: <code>${BUILD_TYPE}</code>" \
+        "Kernel Name: <code>${KERNEL}</code>" \
+        "Release Version: <code>${random_str}</code>" \
+        "Linux Version: <code>$(make kernelversion)</code>" \
+        "Latest Commit: <a href='${commit_url}'>${commit_hash}</a>"
+}
 
-if [ ! -f "$kernel" ] || [ ! -f "$dtbo" ] || [ ! -f "$dtb" ]; then
-	echo -e "\nCompilation failed!"
-	exit 1
-fi
+#######################################
+# Fungsi: Membersihkan folder output
+#######################################
+clean_output() {
+    if [[ "$1" == "-c" || "$1" == "--clean" ]]; then
+        rm -rf out
+        echo "Cleaned output folder"
+    fi
+}
 
-echo -e "\nKernel compiled successfully! Zipping up...\n"
+#######################################
+# Fungsi: Konfigurasi dan kompilasi kernel
+#######################################
+compile_kernel() {
+    echo -e "\nStarting compilation for $DEVICE...\n"
+    make O=out ARCH=arm64 "${DEVICE}_defconfig"
+    make -j$(nproc --all) \
+         O=out \
+         ARCH=arm64 \
+         LLVM=1 \
+         LLVM_IAS=1 \
+         CROSS_COMPILE=aarch64-linux-gnu- \
+         CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+}
 
-if [ -d "$AK3_DIR" ]; then
-	cp -r $AK3_DIR AnyKernel3
-else
-	if ! git clone -q https://github.com/basamaryan/AnyKernel3 -b master AnyKernel3; then
-		echo -e "\nAnyKernel3 repo not found locally and couldn't clone from GitHub! Aborting..."
-		exit 1
-	fi
-fi
+#######################################
+# Fungsi: Verifikasi hasil kompilasi
+#######################################
+verify_build_outputs() {
+    local kernel="out/arch/arm64/boot/Image.gz"
+    local dtbo="out/arch/arm64/boot/dtbo.img"
+    local dtb="out/arch/arm64/boot/dtb.img"
+    END=$(TZ=Asia/Jakarta date +"%s")
+    DIFF=$(( END - START ))
 
-# Modify anykernel.sh to replace device names
-sed -i "s/device\.name1=.*/device.name1=${DEVICE}/" AnyKernel3/anykernel.sh
-sed -i "s/device\.name2=.*/device.name2=${DEVICE}in/" AnyKernel3/anykernel.sh
+    if [ ! -f "$kernel" ] || [ ! -f "$dtbo" ] || [ ! -f "$dtb" ]; then
+        echo -e "\nCompilation failed!"
+        tg_cast "Build for ${DEVICE} <b>failed</b> in $((DIFF / 60)) minute(s) and $((DIFF % 60)) second(s)! Check Instance for errors @RyuDevpr"
+        exit 1
+    fi
 
-cp $kernel AnyKernel3
-cp $dtbo AnyKernel3
-cp $dtb AnyKernel3
-cd AnyKernel3
-zip -r9 "../$ZIPNAME" * -x .git
-cd ..
-rm -rf AnyKernel3
-echo -e "\nCompleted in $((SECONDS / 60)) minute(s) and $((SECONDS % 60)) second(s) !"
-echo "Zip: $ZIPNAME"
+    # Simpan path hasil kompilasi ke variabel global
+    BUILD_KERNEL="$kernel"
+    BUILD_DTBO="$dtbo"
+    BUILD_DTB="$dtb"
 
-if test -z "$(git rev-parse --show-cdup 2>/dev/null)" &&
-   head=$(git rev-parse --verify HEAD 2>/dev/null); then
-	HASH="$(echo $head | cut -c1-8)"
-fi
+    tg_cast "Build for ${DEVICE} <b>succeed</b> took $((DIFF / 60)) minute(s) and $((DIFF % 60)) second(s)! by @RyuDevpr \
+              Uploading zip..."
+}
 
-telegram -f $ZIPNAME -M "Completed in $((SECONDS / 60)) minute(s) and $((SECONDS % 60)) second(s) ! Latest commit: $HASH"
+#######################################
+# Fungsi: Persiapkan AnyKernel3 untuk packaging
+#######################################
+prepare_anykernel() {
+    if [ -d "$AK3_DIR" ]; then
+        cp -r "$AK3_DIR" AnyKernel3
+    else
+        if ! git clone -q https://github.com/romiyusnandar/Anykernel3.git -b sweet AnyKernel3; then
+            echo -e "\nAnyKernel3 repo not found locally and couldn't clone from GitHub! Aborting..."
+            tg_cast "AnyKernel3 repo not found locally and couldn't clone from GitHub! Aborting... @RyuDevpr"
+            exit 1
+        fi
+    fi
+}
+
+#######################################
+# Fungsi: Mengemas kernel ke file zip
+#######################################
+package_kernel() {
+    echo -e "\nKernel compiled successfully! Zipping up...\n"
+
+    prepare_anykernel
+
+    cp "$BUILD_KERNEL" AnyKernel3
+    cp "$BUILD_DTBO" AnyKernel3
+    cp "$BUILD_DTB" AnyKernel3
+
+    pushd AnyKernel3 > /dev/null
+    zip -r9 "../$ZIPNAME" * -x .git
+    popd > /dev/null
+
+    rm -rf AnyKernel3
+
+    echo "Zip: $ZIPNAME"
+    "${TELEGRAM}" -f "$ZIPNAME" -t "${TELEGRAM_TOKEN}" -c "${CHATIDQ}"
+    rm -rf "$ZIPNAME"
+}
+
+#######################################
+# Fungsi utama: Mengkoordinasikan proses build
+#######################################
+main() {
+    clean_output "$1"
+    send_start_telegram
+
+    ZIPNAME="${KERNEL}-${random_str}-${DEVICE}-$(date '+%Y%m%d-%H%M').zip"
+    # Catat waktu mulai build (zona waktu Asia/Jakarta)
+    START=$(TZ=Asia/Jakarta date +"%s")
+
+    compile_kernel
+    verify_build_outputs
+    package_kernel
+}
+
+#######################################
+# Eksekusi fungsi utama
+#######################################
+main "$@"
